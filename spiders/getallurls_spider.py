@@ -14,6 +14,10 @@ from dfsearch.items import DfsearchItem
 
 class GetAllURLsSpider(scrapy.Spider):
     name = "allurls"
+    allowed_domains = [
+        'dytt8.net',
+        'ygdy8.net',
+    ]
     regex = re.compile(
         r'^(?:http|ftp)s?://'  # http:// or https://
         # domain...
@@ -30,17 +34,21 @@ class GetAllURLsSpider(scrapy.Spider):
 
     def start_requests(self):
 
-        #self.urlsQueue.put('https://www.hao123.com/')
+        # self.urlsQueue.put('https://www.hao123.com/')
         self.urlsQueue.put('http://www.dytt8.net')
         yield scrapy.Request(url=self.urlsQueue.get(), callback=self.parse)
 
     def parse(self, response):
         searchItem = DfsearchItem()
         searchItem['url'] = response.url.replace('\'', '')
-        #if self.mySQLPipeline.check_url_exist(url=searchItem.get('url', '')) == False:
-        retBody = response.selector.xpath(u'//body').extract_first()
-        w3lib.html.replace_escape_chars(retBody, which_ones=('\n','\t','\r'), replace_by=u'')
-        searchItem['info'] = w3lib.html.remove_tags(retBody).strip()
+        # if self.mySQLPipeline.check_url_exist(url=searchItem.get('url', '')) == False:
+        # retBody = response.selector.xpath(u'//body').extract_first()
+        # w3lib.html.replace_escape_chars(
+        #     retBody, which_ones=('\n', '\t', '\r'), replace_by=u'')
+        # searchItem['info'] = w3lib.html.remove_tags(retBody).strip()
+        retTitle = response.selector.xpath(u'//title/text()').extract_first()
+        searchItem['info'] = retTitle + \
+            response.selector.xpath(u'//body').extract_first()
         urlObj = urlparse(response.url)
         searchItem['domain'] = urlObj.netloc
         print urlObj.netloc
@@ -51,8 +59,8 @@ class GetAllURLsSpider(scrapy.Spider):
             rawLink = link.xpath('@href').extract_first()
             joinedURL = urljoin(response.url, rawLink).replace('\'', '')
             if self.regex.match(joinedURL) \
-            and self.mySQLPipeline.check_url_exist(url=joinedURL) == False \
-            and not (joinedURL in self.urlsQueue.queue):
+                    and self.mySQLPipeline.check_url_exist(url=joinedURL) == False \
+                    and not (joinedURL in self.urlsQueue.queue):
                 self.urlsQueue.put(joinedURL)
             if self.urlsQueue.qsize() > 0:
                 yield scrapy.Request(url=self.urlsQueue.get(), callback=self.parseLoop)
@@ -60,10 +68,14 @@ class GetAllURLsSpider(scrapy.Spider):
     def parseLoop(self, response):
         searchItem = DfsearchItem()
         searchItem['url'] = response.url.replace('\'', '')
-        #if self.mySQLPipeline.check_url_exist(url=searchItem.get('url', '')) == False:
-        retBody = response.selector.xpath(u'//body').extract_first()
-        w3lib.html.replace_escape_chars(retBody, which_ones=('\n','\t','\r'), replace_by=u'')
-        searchItem['info'] = w3lib.html.remove_tags(retBody).strip()
+        # if self.mySQLPipeline.check_url_exist(url=searchItem.get('url', '')) == False:
+        # retBody = response.selector.xpath(u'//body').extract_first()
+        # w3lib.html.replace_escape_chars(
+        #     retBody, which_ones=('\n', '\t', '\r'), replace_by=u'')
+        # searchItem['info'] = w3lib.html.remove_tags(retBody).strip()
+        retTitle = response.selector.xpath(u'//title/text()').extract_first()
+        searchItem['info'] = retTitle + \
+            response.selector.xpath(u'//body').extract_first()
         urlObj = urlparse(response.url)
         searchItem['domain'] = urlObj.netloc
         print urlObj.netloc
@@ -74,8 +86,8 @@ class GetAllURLsSpider(scrapy.Spider):
             rawLink = link.xpath('@href').extract_first()
             joinedURL = urljoin(response.url, rawLink).replace('\'', '')
             if self.regex.match(joinedURL) \
-            and self.mySQLPipeline.check_url_exist(url=joinedURL) == False \
-            and not (joinedURL in self.urlsQueue.queue):
+                    and self.mySQLPipeline.check_url_exist(url=joinedURL) == False \
+                    and not (joinedURL in self.urlsQueue.queue):
                 self.urlsQueue.put(joinedURL)
             if self.urlsQueue.qsize() > 0:
                 yield scrapy.Request(url=self.urlsQueue.get(), callback=self.parseLoop)

@@ -1,0 +1,32 @@
+PUT /dfsearch
+{
+  "settings": {
+    "index": {
+      "number_of_shards": 5,
+      "number_of_replicas": 1
+    }
+  },
+  "mappings": {
+    "web": {
+      "_all": {
+        "enabled": true
+      },
+      "properties": {
+        "url": {
+          "type": "keyword"
+        },
+        "info": {
+          "type": "text",
+          "analyzer": "standard",
+          "fields": {
+            "chinese": {
+              "type": "text",
+              "analyzer": "ik_max_word"
+            }
+          },
+          "index_options": "offsets"
+        }
+      }
+    }
+  }
+}
