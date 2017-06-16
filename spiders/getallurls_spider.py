@@ -4,7 +4,6 @@
 import scrapy
 import re
 import Queue
-import time
 import w3lib.html
 from scrapy.selector import Selector
 from urlparse import urljoin

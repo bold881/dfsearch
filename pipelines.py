@@ -8,6 +8,9 @@
 import hashlib
 import MySQLdb
 import Queue
+import time
+import datetime
+import itertools
 from scrapy.conf import settings
 from dfsearch.items import DfsearchItem
 from elasticsearch import Elasticsearch, helpers
@@ -52,27 +55,41 @@ class MySQLPipeline(object):
 
     def process_item(self, item, spider):
         if isinstance(item, DfsearchItem):
-            try:
-                self.cursor.execute("INSERT INTO pagedurl (url, domain) \
-                VALUES ('%s', '%s')" % (item.get('url', ''), item.get('domain', '')))
-                self.conn.commit()
-            except MySQLdb.Error, e:
-                print 'DB Error %d: %s' % (e.args[0], e.args[1])
-
             self.itemQueue.put(item)
             if self.itemQueue.qsize() > 100:
+                sqlExe = "INSERT INTO pagedurl (url, domain, created) VALUES "
+                ts = time.time()
+                timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
                 itemArray = []
                 while self.itemQueue.qsize() > 0:
                     qItem = self.itemQueue.get()
-                    doc = {
+                    itemArray.append(qItem)
+
+                    itemSql = "('%s', '%s', '%s'), " % (
+                        qItem.get('url', ''), 
+                        qItem.get('domain', ''),
+                        timestamp)
+                    sqlExe += itemSql
+                sqlExe = sqlExe[:-2]
+                try:
+                    self.cursor.execute(sqlExe)
+                    self.conn.commit()
+                except MySQLdb.Error, e:
+                    print 'DB Error %d: %s' % (e.args[0], e.args[1])
+
+                actions = [
+                    {
+                        '_op_type': 'index',
                         '_index': 'dfsearch',
                         '_type': 'web',
-                        '_id': hashlib.md5(item.get('url', '')).hexdigest(),
-                        'doc': {
+                        '_id': hashlib.md5(qItem.get('url', '')).hexdigest(),
+                        '_source': {
                             'url': qItem.get('url', ''),
                             'info': qItem.get('info', '')
                         }
                     }
-                    itemArray.append(doc)
-                helpers.bulk(self.es, itemArray)
+                    for qItem in itemArray
+                ]
+
+                helpers.bulk(self.es, actions)
         return item
