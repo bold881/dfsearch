@@ -7,14 +7,14 @@
 
 import hashlib
 import MySQLdb
+import Queue
 from scrapy.conf import settings
 from dfsearch.items import DfsearchItem
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, helpers
 
 
 class MySQLPipeline(object):
-
-    
+    itemQueue = Queue.Queue()
 
     def __init__(self):
         self.conn = MySQLdb.connect(
@@ -35,7 +35,8 @@ class MySQLPipeline(object):
         if url == None:
             return True
         try:
-            checkQuery = ("SELECT COUNT(*) FROM pagedurl where url = '%s'")%url
+            checkQuery = (
+                "SELECT COUNT(*) FROM pagedurl where url = '%s'") % url
             self.cursor.execute(checkQuery)
             if int(self.cursor.fetchone()[0]) > 0:
                 return True
@@ -57,11 +58,21 @@ class MySQLPipeline(object):
                 self.conn.commit()
             except MySQLdb.Error, e:
                 print 'DB Error %d: %s' % (e.args[0], e.args[1])
-            encodedUrl = hashlib.md5(item.get('url', '')).hexdigest()
-            doc = {
-                'url': item.get('url', ''),
-                'info': item.get('info', '')
-            }
-            self.es.index(index='dfsearch', doc_type='web',
-                          id=encodedUrl, body=doc)
+
+            self.itemQueue.put(item)
+            if self.itemQueue.qsize() > 100:
+                itemArray = []
+                while self.itemQueue.qsize() > 0:
+                    qItem = self.itemQueue.get()
+                    doc = {
+                        '_index': 'dfsearch',
+                        '_type': 'web',
+                        '_id': hashlib.md5(item.get('url', '')).hexdigest(),
+                        'doc': {
+                            'url': qItem.get('url', ''),
+                            'info': qItem.get('info', '')
+                        }
+                    }
+                    itemArray.append(doc)
+                helpers.bulk(self.es, itemArray)
         return item
